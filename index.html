@@ -812,6 +812,12 @@
     width: 90%;
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
+    max-height: 90vh;
+    overflow: auto;
+  }
+  .modal.modal-large {
+    max-width: 1100px;
+    width: 95%;
   }
   .modal h3 {
     font-family: var(--display);
@@ -926,12 +932,13 @@
     <div class="start-card">
       <span class="icon">🔑</span>
       <h3>기존 학급 불러오기</h3>
-      <p>이미 만들어둔 학급이 있다면 공유 코드와 PIN을 입력해주세요.</p>
+      <p>만들어둔 학급의 코드와 PIN을 입력해주세요.</p>
       <div class="code-input-wrap">
         <input id="loadCodeInput" placeholder="6자리 코드" maxlength="6">
         <input id="loadPinInput" placeholder="PIN" maxlength="4" type="password" style="max-width:90px">
         <button class="btn btn-sm" onclick="loadClass()">불러오기</button>
       </div>
+      <button class="btn btn-sec btn-sm" onclick="event.stopPropagation(); importBackup()" style="margin-top:12px; width:100%">📂 백업 파일(.json)로 불러오기</button>
     </div>
   </div>
   <div id="storageMode" style="margin-top:32px; font-size:12px; color:var(--text-dim); text-align:center"></div>
@@ -1073,7 +1080,7 @@
 <div id="screen-rules" class="screen hidden">
   <button class="back-btn" onclick="show('screen-dashboard')">← 대시보드</button>
   <h2 class="section-title">자리 규칙</h2>
-  <p class="section-sub">규칙은 위에서부터 우선순위가 높아요. 드래그로 순서를 바꿀 수 있고, 충돌이 생기면 아래 규칙부터 자동 해제됩니다.</p>
+  <p class="section-sub">규칙은 위에서부터 우선순위가 높아요. 드래그로 순서를 바꿀 수 있고, 충돌이 생기면 우선순위가 낮은 규칙부터 해제하되 지킬 수 있는 규칙은 최대한 지킵니다.</p>
   
   <div class="rules-list" id="rulesList"></div>
   
@@ -1291,6 +1298,11 @@ function goDraw() {
   // 사전 체크
   const seatTotal = STATE.desks.reduce((s, d) => s + d.seats, 0);
   if (STATE.students.length === 0) { toast('⚠️ 학생을 먼저 등록해주세요.'); return; }
+  const unnamed = STATE.students.filter(s => !s.name || !s.name.trim()).length;
+  if (unnamed > 0) {
+    toast(`⚠️ 이름이 입력되지 않은 학생이 ${unnamed}명 있어요. 학생 명부를 확인해주세요.`);
+    return;
+  }
   if (seatTotal < STATE.students.length) {
     toast(`⚠️ 자리(${seatTotal}개)가 학생(${STATE.students.length}명)보다 적어요.`);
     return;
@@ -1300,6 +1312,8 @@ function goDraw() {
   document.getElementById('preDrawCheck').textContent = msg;
   document.getElementById('avoidSameSeat').checked = STATE.preferences.avoidSameSeat;
   document.getElementById('avoidSamePair').checked = STATE.preferences.avoidSamePair;
+  const orderRadio = document.querySelector(`input[name="revealOrder"][value="${STATE.preferences.revealOrder || 'random'}"]`);
+  if (orderRadio) orderRadio.checked = true;
 }
 
 // ============================================================
@@ -1373,7 +1387,9 @@ async function createClass() {
   
   showModal(`
     <h3>🎉 학급이 만들어졌어요!</h3>
-    <p>아래 코드와 PIN을 꼭 메모해두세요. 다른 PC에서 접속하거나 동료 선생님과 공유할 때 필요합니다.</p>
+    <p>${HAS_CLOUD
+      ? '아래 코드와 PIN을 꼭 메모해두세요. 다른 PC에서 접속하거나 동료 선생님과 공유할 때 필요합니다.'
+      : '아래 코드와 PIN을 꼭 메모해두세요. 이 브라우저에서 다시 접속할 때 필요합니다.'}</p>
     <div class="code-display">
       <div class="label">학급 코드</div>
       <div class="code">${STATE.classCode}</div>
@@ -1383,6 +1399,7 @@ async function createClass() {
       <div class="code">${STATE.classPin}</div>
     </div>
     <p style="font-size:12px; color:var(--accent-2)">⚠️ 코드와 PIN을 잃어버리면 데이터를 복구할 수 없습니다.</p>
+    ${HAS_CLOUD ? '' : `<p style="font-size:12px; color:var(--text-dim)">💾 데이터는 <b>이 브라우저에만</b> 저장됩니다. 다른 PC에서 쓰거나 브라우저 초기화에 대비하려면 대시보드의 [정보] → [백업 파일 저장]을 이용하세요.</p>`}
     <div class="modal-actions">
       <button class="btn" onclick="closeModal(); show('screen-dashboard')">시작하기</button>
     </div>
@@ -1414,7 +1431,9 @@ function logout() {
 function showCodeInfo() {
   showModal(`
     <h3>학급 정보</h3>
-    <p>이 코드와 PIN으로 다른 PC에서도 접속할 수 있고, 동료 교사와 공유할 수도 있어요.</p>
+    <p>${HAS_CLOUD
+      ? '이 코드와 PIN으로 다른 PC에서도 접속할 수 있고, 동료 교사와 공유할 수도 있어요.'
+      : '이 코드와 PIN으로 <b>이 브라우저에서</b> 다시 접속할 수 있어요.<br>💾 데이터는 이 브라우저에만 저장되므로, 다른 PC에서 쓰거나 만약을 대비하려면 아래 백업 파일을 저장해두세요.'}</p>
     <div class="code-display">
       <div class="label">학급 코드</div>
       <div class="code">${STATE.classCode}</div>
@@ -1424,9 +1443,83 @@ function showCodeInfo() {
       <div class="code">${STATE.classPin}</div>
     </div>
     <div class="modal-actions">
+      <button class="btn btn-sec" onclick="exportBackup()">💾 백업 파일 저장</button>
       <button class="btn" onclick="closeModal()">확인</button>
     </div>
   `);
+}
+
+// ============================================================
+// 백업 내보내기/가져오기 (JSON 파일)
+// ============================================================
+function exportBackup() {
+  if (!STATE.classCode) return;
+  const data = {
+    app: 'seat-picker',
+    version: 1,
+    code: STATE.classCode,
+    pin: STATE.classPin,
+    className: STATE.className,
+    students: STATE.students,
+    desks: STATE.desks,
+    rules: STATE.rules,
+    messages: STATE.messages,
+    history: STATE.history,
+    preferences: STATE.preferences,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `자리뽑기_백업_${STATE.className}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('💾 백업 파일을 저장했어요. 안전한 곳에 보관하세요!');
+}
+
+function importBackup() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.app !== 'seat-picker' || !data.code || !data.pin) {
+          toast('⚠️ 올바른 백업 파일이 아니에요.');
+          return;
+        }
+        // 같은 코드의 학급이 이미 있으면 확인 후 덮어쓰기
+        const existing = await Storage.get(`class:${data.code}`).catch(() => null);
+        if (existing && !confirm(`이미 같은 코드(${data.code})의 학급이 있어요. 백업 내용으로 덮어쓸까요?`)) return;
+        const stateData = {
+          pin: data.pin,
+          className: data.className || '우리 반',
+          students: data.students || [],
+          desks: data.desks || [],
+          rules: data.rules || [],
+          messages: data.messages || [],
+          history: data.history || [],
+          preferences: data.preferences || { avoidSameSeat: false, avoidSamePair: false, revealOrder: 'random' },
+        };
+        await Storage.set(`class:${data.code}`, JSON.stringify(stateData));
+        const loaded = await loadState(data.code, data.pin);
+        if (loaded === true) {
+          show('screen-dashboard');
+          toast(`✅ ${STATE.className} 백업을 불러왔어요!`);
+        } else {
+          toast('⚠️ 백업을 불러오지 못했어요.');
+        }
+      } catch (err) {
+        console.error('백업 가져오기 실패:', err);
+        toast('⚠️ 백업 파일을 읽을 수 없어요.');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ============================================================
@@ -1448,6 +1541,11 @@ function renderDashboard() {
 // ============================================================
 function rid() { return Math.random().toString(36).slice(2, 10); }
 
+// HTML/속성/SVG 삽입용 이스케이프 (이름·메시지에 특수문자가 있어도 화면이 깨지지 않게)
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
 function renderStudents() {
   const tbody = document.getElementById('studentTableBody');
   if (STATE.students.length === 0) {
@@ -1464,7 +1562,7 @@ function renderStudents() {
         </div>
       </td>
       <td><input type="number" value="${s.num || ''}" onchange="updateStudent('${s.id}', 'num', this.value)" style="width:60px"></td>
-      <td><input value="${s.name || ''}" onchange="updateStudent('${s.id}', 'name', this.value)" placeholder="이름"></td>
+      <td><input value="${esc(s.name)}" onchange="updateStudent('${s.id}', 'name', this.value)" placeholder="이름"></td>
       <td>
         <select onchange="updateStudent('${s.id}', 'gender', this.value)">
           <option value="">선택</option>
@@ -1655,41 +1753,47 @@ function renderClassroom() {
   document.getElementById('seatCount').textContent = STATE.desks.reduce((s,d) => s + d.seats, 0);
 }
 
+// 책상 드래그: 문서 레벨 리스너는 한 번만 등록 (렌더링마다 누적되지 않도록)
+let DESK_DRAG = null; // { el, deskData, offsetX, offsetY }
+
 function makeDraggable(el, deskData) {
-  let dragging = false, offsetX, offsetY, moved = false;
   el.onmousedown = (e) => {
     if (e.button !== 0) return;
-    dragging = true; moved = false;
     const rect = el.getBoundingClientRect();
-    offsetX = e.clientX - rect.left;
-    offsetY = e.clientY - rect.top;
+    DESK_DRAG = {
+      el, deskData,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    };
     e.preventDefault();
   };
-  document.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    moved = true;
-    const area = document.getElementById('canvasArea');
-    const rect = area.getBoundingClientRect();
-    // 스크롤 위치 반영
-    let x = e.clientX - rect.left - offsetX + area.scrollLeft;
-    let y = e.clientY - rect.top - offsetY + area.scrollTop;
-    // 그리드 스냅 (40px)
-    x = Math.round(x / 40) * 40;
-    y = Math.round(y / 40) * 40;
-    // 경계 체크 (칠판/교탁 영역 피하기)
-    const scrollWidth = area.scrollWidth || rect.width;
-    const scrollHeight = area.scrollHeight || rect.height;
-    x = Math.max(40, Math.min(scrollWidth - parseInt(el.style.width) - 20, x));
-    y = Math.max(100, Math.min(scrollHeight - parseInt(el.style.height) - 10, y));
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
-    deskData.x = x;
-    deskData.y = y;
-  });
-  document.addEventListener('mouseup', () => {
-    if (dragging) { dragging = false; saveState(); }
-  });
 }
+
+document.addEventListener('mousemove', (e) => {
+  if (!DESK_DRAG) return;
+  const { el, deskData, offsetX, offsetY } = DESK_DRAG;
+  const area = document.getElementById('canvasArea');
+  const rect = area.getBoundingClientRect();
+  // 스크롤 위치 반영
+  let x = e.clientX - rect.left - offsetX + area.scrollLeft;
+  let y = e.clientY - rect.top - offsetY + area.scrollTop;
+  // 그리드 스냅 (40px)
+  x = Math.round(x / 40) * 40;
+  y = Math.round(y / 40) * 40;
+  // 경계 체크 (칠판/교탁 영역 피하기)
+  const scrollWidth = area.scrollWidth || rect.width;
+  const scrollHeight = area.scrollHeight || rect.height;
+  x = Math.max(40, Math.min(scrollWidth - parseInt(el.style.width) - 20, x));
+  y = Math.max(100, Math.min(scrollHeight - parseInt(el.style.height) - 10, y));
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  deskData.x = x;
+  deskData.y = y;
+});
+
+document.addEventListener('mouseup', () => {
+  if (DESK_DRAG) { DESK_DRAG = null; saveState(); }
+});
 
 function selectDesk(id) {
   document.querySelectorAll('.desk').forEach(d => d.classList.remove('selected'));
@@ -1789,7 +1893,7 @@ function ruleTypeLabel(t) {
 }
 
 function ruleDescription(r) {
-  const sName = (id) => STATE.students.find(s => s.id === id)?.name || '?';
+  const sName = (id) => esc(STATE.students.find(s => s.id === id)?.name || '?');
   if (r.type === 'pair') {
     if (r.mode === 'mixed') return '남녀 짝꿍 선호';
     if (r.mode === 'must') return `<b>${sName(r.studentIds[0])}</b>와 <b>${sName(r.studentIds[1])}</b>는 짝꿍`;
@@ -1804,15 +1908,15 @@ function ruleDescription(r) {
     return `<b>${sName(r.studentIds[0])}</b>는 ${areaLabel}`;
   }
   if (r.type === 'distance') return `<b>${sName(r.studentIds[0])}</b>와 <b>${sName(r.studentIds[1])}</b>는 ${r.value}칸 이상 거리`;
-  if (r.type === 'memo') return r.text;
+  if (r.type === 'memo') return esc(r.text);
   return '';
 }
 
 function updateRuleBuilder() {
   const type = document.getElementById('ruleType').value;
   const params = document.getElementById('ruleParams');
-  const opts = STATE.students.map(s => `<option value="${s.id}">${s.num}. ${s.name}</option>`).join('');
-  
+  const opts = STATE.students.map(s => `<option value="${s.id}">${s.num}. ${esc(s.name)}</option>`).join('');
+
   if (type === 'pair') {
     params.innerHTML = `
       <select id="rPairMode" onchange="updateRuleBuilder_pair()">
@@ -1865,7 +1969,7 @@ function updateRuleBuilder() {
 
 function updateRuleBuilder_pair() {
   const mode = document.getElementById('rPairMode').value;
-  const opts = STATE.students.map(s => `<option value="${s.id}">${s.num}. ${s.name}</option>`).join('');
+  const opts = STATE.students.map(s => `<option value="${s.id}">${s.num}. ${esc(s.name)}</option>`).join('');
   const wrap = document.getElementById('rPairStudents');
   if (mode === 'mixed') { wrap.innerHTML = ''; return; }
   wrap.innerHTML = `<select id="rPS1">${opts}</select> <select id="rPS2">${opts}</select>`;
@@ -1949,7 +2053,7 @@ function renderMessages() {
   }
   list.innerHTML = STATE.messages.map(m => `
     <div class="msg-card">
-      <div class="text">"${m.text}"</div>
+      <div class="text">"${esc(m.text)}"</div>
       <button class="btn btn-danger btn-sm" onclick="deleteMessage('${m.id}')">삭제</button>
     </div>
   `).join('');
@@ -1993,19 +2097,119 @@ function renderHistory() {
 function viewHistory(id) {
   const h = STATE.history.find(x => x.id === id);
   if (!h) return;
-  let html = `<h3>${h.date}</h3>`;
-  html += `<p>학생 ${h.studentCount}명에 대한 자리 배치 결과입니다.</p>`;
-  html += `<div style="max-height:300px; overflow-y:auto; background:var(--bg-2); padding:14px; border-radius:8px; font-size:13px; line-height:1.8">`;
-  h.placements.forEach(p => {
-    const s = STATE.students.find(x => x.id === p.studentId);
-    if (s) html += `${s.num}. ${s.name}<br>`;
+  // 이력에 저장된 당시 책상 배치가 있으면 그것을 사용 (없으면 현재 배치)
+  const histDesks = h.desks || STATE.desks;
+
+  // 책상 영역 크기 계산
+  let maxX = 0, maxY = 0;
+  histDesks.forEach(d => {
+    const isV = d.rotation === 90 || d.rotation === 270;
+    const w = isV ? 80 : 80 * d.seats;
+    const hh = isV ? 80 * d.seats : 80;
+    maxX = Math.max(maxX, d.x + w);
+    maxY = Math.max(maxY, d.y + hh);
   });
-  html += `</div>`;
+  maxX = Math.max(maxX, 800);
+  maxY = Math.max(maxY, 240);
+
+  // placement 맵 (deskId+seatIdx → student)
+  const seatMap = {};
+  h.placements.forEach(p => {
+    seatMap[`${p.deskId}_${p.seatIdx}`] = STATE.students.find(s => s.id === p.studentId);
+  });
+
+  // SVG 그리기
+  const W = maxX + 40, H = maxY + 40;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; background:#f5f1e8; border-radius:8px; display:block;">`;
+  // 그리드 배경
+  svg += `<defs><pattern id="grid${id}" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,.05)" stroke-width="1"/></pattern></defs>`;
+  svg += `<rect width="${W}" height="${H}" fill="url(#grid${id})"/>`;
+  // 교탁 + 칠판
+  svg += `<rect x="12" y="12" width="170" height="60" fill="#8b6f47" rx="4"/>`;
+  svg += `<text x="97" y="50" text-anchor="middle" fill="white" font-size="15" font-weight="bold">교탁</text>`;
+  svg += `<rect x="200" y="12" width="${W - 220}" height="50" fill="#2a4a3a" stroke="#8b6f47" stroke-width="3" rx="4"/>`;
+  svg += `<text x="${(W+180)/2}" y="44" text-anchor="middle" fill="white" font-size="15" font-weight="bold">칠 판</text>`;
+
+  // 책상
+  histDesks.forEach(d => {
+    const isV = d.rotation === 90 || d.rotation === 270;
+    const seatW = 80, seatH = 80;
+    const dw = isV ? seatW : seatW * d.seats;
+    const dh = isV ? seatH * d.seats : seatH;
+    svg += `<rect x="${d.x}" y="${d.y}" width="${dw}" height="${dh}" fill="white" stroke="#8b6f47" stroke-width="2" rx="6"/>`;
+
+    for (let i = 0; i < d.seats; i++) {
+      const sx = isV ? d.x : d.x + i * seatW;
+      const sy = isV ? d.y + i * seatH : d.y;
+      // 좌석 구분선
+      if (i > 0) {
+        if (isV) {
+          svg += `<line x1="${sx + 6}" y1="${sy}" x2="${sx + seatW - 6}" y2="${sy}" stroke="#ddd" stroke-dasharray="3,3"/>`;
+        } else {
+          svg += `<line x1="${sx}" y1="${sy + 6}" x2="${sx}" y2="${sy + seatH - 6}" stroke="#ddd" stroke-dasharray="3,3"/>`;
+        }
+      }
+      const student = seatMap[`${d.id}_${i}`];
+      if (student) {
+        // 좌석 배경 (살짝 노란빛)
+        svg += `<rect x="${sx + 2}" y="${sy + 2}" width="${seatW - 4}" height="${seatH - 4}" fill="#fff8dc" rx="4"/>`;
+        // 학생 번호 (작게)
+        svg += `<text x="${sx + 8}" y="${sy + 16}" fill="#999" font-size="10">${student.num || ''}</text>`;
+        // 학생 이름 (크게)
+        svg += `<text x="${sx + seatW/2}" y="${sy + seatH/2 + 8}" text-anchor="middle" fill="#2a2a2a" font-size="16" font-weight="bold">${esc(student.name)}</text>`;
+        // 성별 표시 (살짝)
+        if (student.gender) {
+          const genderColor = student.gender === 'M' ? '#6db4ff' : '#ff9bb8';
+          svg += `<circle cx="${sx + seatW - 10}" cy="${sy + 10}" r="4" fill="${genderColor}"/>`;
+        }
+      }
+    }
+  });
+  svg += `</svg>`;
+
+  // 모달 내용
+  let html = `
+    <h3 style="margin-bottom:4px">📜 ${h.date}</h3>
+    <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px">
+      학생 ${h.studentCount}명 · 적용 규칙 ${h.appliedRules || 0}개
+      ${h.releasedRules ? ` · 해제된 규칙 ${h.releasedRules}개` : ''}
+      ${h.manuallyEdited ? ' · ✋ 수동 수정됨' : ''}
+    </p>
+    <div style="background:var(--bg-2); padding:12px; border-radius:10px; max-height:60vh; overflow:auto">${svg}</div>
+  `;
   if (h.released && h.released.length) {
-    html += `<p style="margin-top:14px; font-size:13px; color:var(--accent-2)">해제된 규칙: ${h.released.length}개</p>`;
+    html += `<div style="margin-top:14px; padding:12px; background:rgba(255,107,107,.1); border-radius:8px; font-size:13px; color:var(--accent-2)">
+      <b>⚠️ 적용되지 못한 규칙</b><br>${h.released.join('<br>')}
+    </div>`;
   }
-  html += `<div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button></div>`;
-  showModal(html);
+  html += `<div class="modal-actions">
+    <button class="btn btn-sec" onclick="downloadHistoryImage('${id}')">📸 이미지로 저장</button>
+    <button class="btn" onclick="closeModal()">닫기</button>
+  </div>`;
+  showModal(html, true); // 큰 모달
+}
+
+// 이력 화면에서 이미지로 저장
+function downloadHistoryImage(id) {
+  const h = STATE.history.find(x => x.id === id);
+  if (!h) return;
+  // 현재 CURRENT_DRAW을 이력 데이터로 임시 설정 후 이미지 저장
+  const tempCurrent = CURRENT_DRAW;
+  const histDesks = h.desks || STATE.desks;
+  const seats = [];
+  histDesks.forEach(d => {
+    for (let i = 0; i < d.seats; i++) {
+      seats.push({ deskId: d.id, seatIdx: i });
+    }
+  });
+  const placement = {};
+  h.placements.forEach(p => {
+    const idx = seats.findIndex(s => s.deskId === p.deskId && s.seatIdx === p.seatIdx);
+    if (idx >= 0) placement[p.studentId] = idx;
+  });
+  CURRENT_DRAW = { placement, seats, revealDone: true };
+  downloadDrawImage(histDesks);
+  CURRENT_DRAW = tempCurrent;
 }
 
 // ============================================================
@@ -2169,18 +2373,34 @@ function generatePlacement(rules, options) {
   }
   
   // 시도: 규칙 모두 적용 → 실패 시 낮은 우선순위부터 해제
-  const released = [];
-  for (let attempt = 0; attempt < activeRules.length + 1; attempt++) {
-    const currentRules = activeRules.slice(0, activeRules.length - attempt);
-    const result = tryPlace(students, seats, currentRules);
-    if (result) {
-      return { placement: result, seats, released, success: true };
-    }
-    if (attempt < activeRules.length) {
-      released.push(activeRules[activeRules.length - 1 - attempt]);
-    }
+  let released = [];
+  let currentRules = activeRules.slice();
+  let result = tryPlace(students, seats, currentRules);
+  while (!result && currentRules.length > 0) {
+    released.push(currentRules.pop()); // 우선순위가 가장 낮은 규칙부터 해제
+    result = tryPlace(students, seats, currentRules, 500);
   }
-  
+
+  if (result) {
+    // 해제된 규칙을 우선순위 높은 것부터 다시 적용해보기
+    // (충돌 원인이 아닌 규칙까지 함께 버려지는 것을 방지)
+    if (released.length > 1) {
+      const stillReleased = [];
+      for (let i = released.length - 1; i >= 0; i--) {
+        const candidate = released[i];
+        const retry = tryPlace(students, seats, [...currentRules, candidate], 400);
+        if (retry) {
+          currentRules.push(candidate);
+          result = retry;
+        } else {
+          stillReleased.push(candidate);
+        }
+      }
+      released = stillReleased;
+    }
+    return { placement: result, seats, released, success: true };
+  }
+
   // 마지막 수단: 모든 규칙 무시하고 랜덤
   const shuffled = [...students].sort(() => Math.random() - 0.5);
   const placement = {};
@@ -2297,35 +2517,37 @@ function startDrawShow() {
   STATE.preferences.avoidSamePair = document.getElementById('avoidSamePair').checked;
   STATE.preferences.revealOrder = document.querySelector('input[name="revealOrder"]:checked').value;
   saveState();
-  
-  // 배치 계산
-  const result = generatePlacement(STATE.rules, STATE.preferences);
-  if (!result.placement) {
-    toast('⚠️ 배치를 만들 수 없어요.');
-    return;
-  }
-  CURRENT_DRAW = result;
-  
-  // 메시지 선택
-  const msg = STATE.messages.length > 0 
-    ? STATE.messages[Math.floor(Math.random() * STATE.messages.length)].text
-    : '준비된 메시지가 없습니다.';
-  
-  // 오버레이 표시 (학생 공개 화면 시작)
-  const overlay = document.getElementById('drawOverlay');
-  overlay.classList.remove('hidden');
-  overlay.className = 'draw-screen';
-  overlay.innerHTML = `
-    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="전체화면 (F11도 가능)">⛶</button>
-    <div class="draw-message-stage" id="drawMsgStage">
-      <div class="quote-mark">"</div>
-      <div class="message-text">${msg}</div>
-      <button class="start-draw-btn" onclick="beginDrawing()">자리 뽑기 시작 ▶</button>
-    </div>
-  `;
-  
+
   // 자동으로 전체화면 진입 시도 (사용자 클릭으로 트리거됐기 때문에 가능)
   requestFullscreenSafe();
+
+  // 규칙이 많거나 충돌하면 계산에 몇 초 걸릴 수 있어 안내 후 비동기로 계산
+  toast('🎲 자리 배치를 계산하고 있어요...');
+  setTimeout(() => {
+    const result = generatePlacement(STATE.rules, STATE.preferences);
+    if (!result.placement) {
+      toast('⚠️ 배치를 만들 수 없어요.');
+      return;
+    }
+    CURRENT_DRAW = result;
+
+    // 메시지 선택
+    const msg = STATE.messages.length > 0
+      ? STATE.messages[Math.floor(Math.random() * STATE.messages.length)].text
+      : '준비된 메시지가 없습니다.';
+
+    // 오버레이 표시 (학생 공개 화면 시작)
+    const overlay = document.getElementById('drawOverlay');
+    overlay.className = 'draw-screen';
+    overlay.innerHTML = `
+      <button class="fullscreen-btn" onclick="toggleFullscreen()" title="전체화면 (F11도 가능)">⛶</button>
+      <div class="draw-message-stage" id="drawMsgStage">
+        <div class="quote-mark">"</div>
+        <div class="message-text">${esc(msg)}</div>
+        <button class="start-draw-btn" onclick="beginDrawing()">자리 뽑기 시작 ▶</button>
+      </div>
+    `;
+  }, 50);
 }
 
 function requestFullscreenSafe() {
@@ -2456,8 +2678,12 @@ function revealSeats() {
   
   let i = 0;
   function next() {
+    // 공개 도중 화면이 닫혔으면 중단
+    if (!stage.isConnected) return;
     if (i >= entries.length) {
       setTimeout(() => {
+        if (!stage.isConnected) return;
+        CURRENT_DRAW.revealDone = true;
         playTada();
         triggerConfetti();
         saveDrawHistory();
@@ -2480,16 +2706,20 @@ function revealSeats() {
 function spinSlot(seatEl, finalStudentId) {
   const student = STATE.students.find(s => s.id === finalStudentId);
   if (!student) return;
-  
+
   seatEl.classList.add('slot-spinning');
   let spinCount = 0;
   const maxSpins = 12;
+  // 학생이 1명뿐이면 본인 이름으로 스핀 (빈 배열 접근 방지)
   const otherStudents = STATE.students.filter(s => s.id !== finalStudentId);
-  
+  const spinPool = otherStudents.length > 0 ? otherStudents : [student];
+
   playClick();
-  
+
   const interval = setInterval(() => {
-    const random = otherStudents[Math.floor(Math.random() * otherStudents.length)];
+    // 뽑기 화면이 닫혔으면 스핀 중단 (잔여 interval 방지)
+    if (!seatEl.isConnected) { clearInterval(interval); return; }
+    const random = spinPool[Math.floor(Math.random() * spinPool.length)];
     seatEl.textContent = random.name;
     spinCount++;
     if (spinCount >= maxSpins) {
@@ -2506,7 +2736,7 @@ function spinSlot(seatEl, finalStudentId) {
       } else {
         const ph = document.createElement('div');
         ph.className = 'photo-placeholder';
-        ph.textContent = student.name[0];
+        ph.textContent = (student.name || '?').charAt(0) || '?';
         seatEl.appendChild(ph);
       }
       const nameSpan = document.createElement('span');
@@ -2538,6 +2768,11 @@ function showResultInfo() {
 
 function confirmReDraw() {
   if (confirm('다시 뽑을까요? (수동으로 교환한 자리도 초기화됩니다)')) {
+    // 방금 뽑은 결과의 이력은 무효화 — 회피 옵션이 '진짜 이전 배치'를 기준으로 하도록
+    if (CURRENT_DRAW && CURRENT_DRAW.savedHistoryId) {
+      STATE.history = STATE.history.filter(h => h.id !== CURRENT_DRAW.savedHistoryId);
+      saveState();
+    }
     closeDrawScreen();
     startDrawShow();
   }
@@ -2599,7 +2834,7 @@ function onSeatClick(seatEl) {
     SWAP_SELECTED = { studentId, placementSeatIdx, seatEl };
     seatEl.classList.add('swap-selected');
     const student = STATE.students.find(s => s.id === studentId);
-    showSwapHint(`🔁 <b>${student.name}</b> 선택됨 — 자리를 바꿀 학생을 클릭하세요`);
+    showSwapHint(`🔁 <b>${esc(student.name)}</b> 선택됨 — 자리를 바꿀 학생을 클릭하세요`);
     playClick();
   } else {
     // 두 번째 학생 선택 → 교환
@@ -2654,7 +2889,7 @@ function swapSeats(a, b) {
     });
     
     SWAP_SELECTED = null;
-    showSwapHint(`✅ <b>${studentA.name}</b> ↔ <b>${studentB.name}</b> 교환 완료`);
+    showSwapHint(`✅ <b>${esc(studentA.name)}</b> ↔ <b>${esc(studentB.name)}</b> 교환 완료`);
     setTimeout(() => {
       if (SWAP_MODE && !SWAP_SELECTED) showSwapHint('🔁 다른 학생을 또 교환하시거나, 다시 클릭해서 모드를 끄세요');
     }, 1500);
@@ -2675,7 +2910,7 @@ function renderSeatContent(seatEl, student) {
   } else {
     const ph = document.createElement('div');
     ph.className = 'photo-placeholder';
-    ph.textContent = student.name[0];
+    ph.textContent = (student.name || '?').charAt(0) || '?';
     seatEl.appendChild(ph);
   }
   const nameSpan = document.createElement('span');
@@ -2708,9 +2943,11 @@ function hideSwapHint() {
 }
 
 function updateLatestHistory() {
-  // 가장 최근 이력 항목을 현재 placement로 갱신 (자리 교환 결과 반영)
-  if (STATE.history.length === 0) return;
-  const latest = STATE.history[STATE.history.length - 1];
+  // 현재 뽑기의 이력 항목을 현재 placement로 갱신 (자리 교환 결과 반영)
+  // 아직 이력이 저장되기 전(공개 진행 중)이라면 건너뜀 — 저장 시점에 최신 placement가 반영됨
+  if (!CURRENT_DRAW || !CURRENT_DRAW.savedHistoryId) return;
+  const latest = STATE.history.find(h => h.id === CURRENT_DRAW.savedHistoryId);
+  if (!latest) return;
   const placements = [];
   for (const [studentId, seatIdx] of Object.entries(CURRENT_DRAW.placement)) {
     const seat = CURRENT_DRAW.seats[seatIdx];
@@ -2730,8 +2967,9 @@ function closeDrawScreen() {
     if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
   }
-  document.getElementById('drawOverlay').classList.add('hidden');
-  document.getElementById('drawOverlay').innerHTML = '';
+  const overlay = document.getElementById('drawOverlay');
+  overlay.className = 'hidden'; // draw-screen 클래스 제거 (푸터 다시 표시)
+  overlay.innerHTML = '';
 }
 
 function saveDrawHistory() {
@@ -2742,10 +2980,13 @@ function saveDrawHistory() {
   }
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const entryId = rid();
+  CURRENT_DRAW.savedHistoryId = entryId;
   STATE.history.push({
-    id: rid(),
+    id: entryId,
     date: dateStr,
     placements,
+    desks: STATE.desks.map(d => ({ ...d })), // 당시 책상 배치 스냅샷 (이력 조회/이미지 저장용)
     studentCount: STATE.students.length,
     appliedRules: STATE.rules.filter(r => r.type !== 'memo').length - (CURRENT_DRAW.released?.filter(r => !r.id.startsWith('virt_')).length || 0),
     releasedRules: CURRENT_DRAW.released?.filter(r => !r.id.startsWith('virt_')).length || 0,
@@ -2756,12 +2997,13 @@ function saveDrawHistory() {
   saveState();
 }
 
-function downloadDrawImage() {
-  // html2canvas 없이 SVG로 변환
-  const stage = document.getElementById('drawStage');
-  if (!stage) return;
-  // 간단한 방법: 화면 캡처는 어려우므로 SVG로 직접 그리기
-  const desks = STATE.desks;
+function downloadDrawImage(desksOverride) {
+  // html2canvas 없이 SVG로 직접 그려서 PNG 변환
+  if (!CURRENT_DRAW) return;
+  // 아직 공개가 끝나지 않았다면 전체 결과 유출(스포일러) 주의 안내
+  if (!CURRENT_DRAW.revealDone && !confirm('아직 자리 공개가 끝나지 않았어요. 전체 결과가 담긴 이미지를 지금 저장할까요?')) return;
+  const desks = desksOverride || STATE.desks;
+  if (desks.length === 0) return;
   const maxX = Math.max(...desks.map(d => d.x + 200));
   const maxY = Math.max(...desks.map(d => d.y + 200));
   const W = Math.max(maxX, 800), H = Math.max(maxY, 600);
@@ -2798,7 +3040,7 @@ function downloadDrawImage() {
         }
       }
       if (studentName) {
-        svg += `<text x="${sx + seatW/2}" y="${sy + seatH/2 + 5}" text-anchor="middle" fill="#2a2a2a" font-size="15" font-weight="bold">${studentName}</text>`;
+        svg += `<text x="${sx + seatW/2}" y="${sy + seatH/2 + 5}" text-anchor="middle" fill="#2a2a2a" font-size="15" font-weight="bold">${esc(studentName)}</text>`;
       }
     }
   });
@@ -2820,7 +3062,12 @@ function downloadDrawImage() {
       link.href = URL.createObjectURL(b);
       link.click();
       URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
     });
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    toast('⚠️ 이미지 생성에 실패했어요.');
   };
   img.src = url;
   toast('📸 이미지를 저장하고 있어요...');
@@ -2884,10 +3131,10 @@ function triggerConfetti() {
 // ============================================================
 // 모달
 // ============================================================
-function showModal(content) {
+function showModal(content, large = false) {
   const c = document.getElementById('modalContainer');
   c.className = 'modal-bg';
-  c.innerHTML = `<div class="modal">${content}</div>`;
+  c.innerHTML = `<div class="modal ${large ? 'modal-large' : ''}">${content}</div>`;
   c.classList.remove('hidden');
 }
 function closeModal() {
