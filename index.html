@@ -934,8 +934,8 @@
       <h3>기존 학급 불러오기</h3>
       <p>만들어둔 학급의 코드와 PIN을 입력해주세요.</p>
       <div class="code-input-wrap">
-        <input id="loadCodeInput" placeholder="6자리 코드" maxlength="6">
-        <input id="loadPinInput" placeholder="PIN" maxlength="4" type="password" style="max-width:90px">
+        <input id="loadCodeInput" placeholder="학급 코드" maxlength="12">
+        <input id="loadPinInput" placeholder="PIN" maxlength="6" type="password" style="max-width:90px">
         <button class="btn btn-sm" onclick="loadClass()">불러오기</button>
       </div>
       <button class="btn btn-sec btn-sm" onclick="event.stopPropagation(); importBackup()" style="margin-top:12px; width:100%">📂 백업 파일(.json)로 불러오기</button>
@@ -1343,30 +1343,59 @@ function generatePin() {
 function showCreateClass() {
   showModal(`
     <h3>새 학급 만들기</h3>
-    <p>학급 이름을 입력해주세요. 코드와 PIN은 자동으로 생성됩니다.</p>
-    <input id="newClassName" placeholder="예: 6학년 2반" style="width:100%; margin-bottom:12px">
+    <p>학급 이름을 입력해주세요. 코드와 PIN은 직접 정하거나, 비워두면 자동으로 생성됩니다.</p>
+    <input id="newClassName" placeholder="학급 이름 (예: 6학년 2반)" style="width:100%; margin-bottom:12px">
+    <div style="display:flex; gap:8px; margin-bottom:8px">
+      <input id="newClassCode" placeholder="코드 (선택 · 영문/숫자 4~12자)" maxlength="12" style="flex:1; text-transform:uppercase; letter-spacing:1px">
+      <input id="newClassPin" placeholder="PIN (선택 · 숫자 4~6자리)" maxlength="6" inputmode="numeric" style="width:170px">
+    </div>
+    <p style="font-size:12px; color:var(--text-dim); margin-bottom:0">💡 기억하기 쉬운 코드·PIN을 직접 정할 수 있어요. 비워두면 안전한 값이 자동 생성됩니다.</p>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="closeModal()">취소</button>
       <button class="btn" onclick="createClass()">만들기</button>
     </div>
   `);
-  setTimeout(() => document.getElementById('newClassName').focus(), 100);
+  setTimeout(() => document.getElementById('newClassName')?.focus(), 100);
 }
 
 async function createClass() {
   const name = document.getElementById('newClassName').value.trim();
   if (!name) { toast('학급 이름을 입력해주세요.'); return; }
-  
-  // 중복 안 되는 코드 생성
-  let code = generateCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await Storage.get(`class:${code}`).catch(() => null);
-    if (!existing) break;
+
+  const codeInput = (document.getElementById('newClassCode').value || '').trim().toUpperCase();
+  const pinInput = (document.getElementById('newClassPin').value || '').trim();
+
+  // 코드: 직접 입력했으면 검증 후 사용, 비었으면 자동 생성
+  let code;
+  if (codeInput) {
+    if (!/^[A-Z0-9]{4,12}$/.test(codeInput)) {
+      toast('코드는 영문/숫자 4~12자로 입력해주세요.'); return;
+    }
+    const existing = await Storage.get(`class:${codeInput}`).catch(() => null);
+    if (existing) { toast('이미 사용 중인 코드예요. 다른 코드를 입력해주세요.'); return; }
+    code = codeInput;
+  } else {
     code = generateCode();
+    for (let i = 0; i < 5; i++) {
+      const existing = await Storage.get(`class:${code}`).catch(() => null);
+      if (!existing) break;
+      code = generateCode();
+    }
   }
-  
+
+  // PIN: 직접 입력했으면 검증 후 사용, 비었으면 자동 생성
+  let pin;
+  if (pinInput) {
+    if (!/^[0-9]{4,6}$/.test(pinInput)) {
+      toast('PIN은 숫자 4~6자리로 입력해주세요.'); return;
+    }
+    pin = pinInput;
+  } else {
+    pin = generatePin();
+  }
+
   STATE.classCode = code;
-  STATE.classPin = generatePin();
+  STATE.classPin = pin;
   STATE.className = name;
   STATE.students = [];
   STATE.desks = [];
